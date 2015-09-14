@@ -15,8 +15,8 @@ module Neo4j
 
         def result(node = true, rel = true)
           @result_cache ||= {}
-          return @result_cache[[node, rel]] if @result_cache[[node, rel]]
-
+          cache_key = [node, rel, @chain.map { |c| c.instance_variable_get(:@arg) }]
+          return @result_cache[cache_key] if @result_cache[cache_key]
           pluck_vars = []
           pluck_vars << identity if node
           pluck_vars << @rel_var if rel
@@ -28,7 +28,7 @@ module Neo4j
             object.instance_variable_set('@source_query_proxy_result_cache', result)
           end
 
-          @result_cache[[node, rel]] ||= result
+          @result_cache[cache_key] ||= result
         end
 
         def fetch_result_cache

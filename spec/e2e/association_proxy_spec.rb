@@ -7,7 +7,7 @@ describe 'Association Proxy' do
 
     stub_active_node_class('Student') do
       property :name
-      has_many :out, :lessons, type: :has_student, model_class: 'Lesson'
+      has_many :out, :lessons, model_class: 'Lesson', rel_class: 'HasStudent'
       has_many :in, :exams, model_class: 'Exam', origin: :students
       has_one :out, :favorite_lesson, type: nil, model_class: 'Lesson'
     end
@@ -15,7 +15,7 @@ describe 'Association Proxy' do
     stub_active_node_class('Lesson') do
       property :subject
       property :level, type: Integer
-      has_many :in, :students, model_class: Student, origin: :lessons
+      has_many :in, :students, model_class: Student, rel_class: 'HasStudent'
       has_many :out, :exams_given, type: nil, model_class: 'Exam'
     end
 
@@ -23,6 +23,12 @@ describe 'Association Proxy' do
       property :name
       has_many :in, :lessons, model_class: 'Lesson', origin: :exams_given
       has_many :out, :students, type: :has_student, model_class: Student
+    end
+
+    stub_active_rel_class('HasStudent') do
+      from_class 'Lesson'
+      to_class 'Student'
+      property :grade
     end
   end
 
@@ -97,6 +103,33 @@ describe 'Association Proxy' do
       student = Student.create.tap { |s| s.lessons = [l1, l2] }
 
       expect(student.lessons.map { |l| l.exams_given.count }).to eq([1, 2])
+    end
+  end
+
+  describe 'filtering matches' do
+    let(:query) { billy.lessons }
+
+    before do
+      {60 => science, 70 => math}.each do |grade, subject|
+        rel = billy.lessons.first_rel_to(subject)
+        rel.grade = grade
+        rel.save
+      end
+
+      # The bug this fixes does not occur unless this happens first
+      billy.lessons.to_a
+    end
+
+    it 'load different results' do
+      rel_grade_60 = query.rel_where(grade: 60).to_a.first
+      rel_grade_70 = query.rel_where(grade: 70).to_a.first
+      math_lessons = query.where(subject: 'math').to_a.first
+      science_lessons = query.where(subject: 'science').to_a.first
+      expect(rel_grade_60).to eq science
+      expect(science_lessons).to eq science
+
+      expect(rel_grade_70).to eq math
+      expect(math_lessons).to eq math
     end
   end
 
